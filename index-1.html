@@ -1,0 +1,67 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>Unknown </title></head><body>
+<h1 id="hls-from-kafka">HLS from Kafka</h1>
+<p>All modules are isolated and need to be integrated to run as one. There are 3 main modules:
+<em> <em>Kafka consumer and video creator</em></em> <em>M3U8 master playlist creator</em>
+* <em>Flask app to stream from playlist</em></p>
+<h2 id="kafka-consumer-and-video-creator">Kafka consumer and video creator</h2>
+<ul>
+<li>Python script that consumes frames from camera Kafka Producer</li>
+<li>Writes frames to video. After every 80 frames the video is publishe i.e saved to disk</li>
+<li>Video is stored in home directory of script</li>
+<li>
+<p>The camera fps is/was 5 frame per second (fps), thus a 80 frames video is 16 seconds long</p>
+</li>
+<li>
+<p>Libraries needed</p>
+<ul>
+<li>Kafka-python</li>
+<li>cv2</li>
+<li>numpy</li>
+</ul>
+</li>
+</ul>
+<h2 id="m3u8-master-playlist-creator">M3U8 master playlist creator</h2>
+<ul>
+<li>Uses FFMPEG tool in Python by using a OS command call</li>
+<li>Install FFMPEG for Ubuntu OS using terminal. Follow instructions here: https://tecadmin.net/install-ffmpeg-on-linux/</li>
+<li>Following are explanations of the options used in the FFMPEG tool:<ul>
+<li><code>-c:v libx264</code> is the codec:video. Here we use the x264 codec to have a h264 output format</li>
+<li><code>-crf 20</code> is the video quality. 51 is the worst quality and 1 the best</li>
+<li><code>-g 5 -keyint_min 5</code> sets group picture size to 5. Video source is 5 FPS. So each second will start with a new picture group. Create key frame every 5 frames and start new picture group</li>
+<li><code>-sc_threshold 0</code> indicates don't create key frames on scene change, only according to -g</li>
+<li><code>-hls_time 4</code> slices the video and audio into segments with a duration of 4 seconds</li>
+<li><code>-hls_flags independent_segments</code> indicates that all media samples in a Media Segment can be decoded without information from other segments</li>
+<li><code>-b:v:0</code> sets the bitate for stream 0 (the lower quality)</li>
+<li><code>-filter:v:0 scale=640:360</code> scales stream 0 to the desired resolution</li>
+<li><code>-map v:x</code> tells ffmpeg that a new video variant starts. x is the number of input video signal. Since only one video input, index 0 is used here</li>
+<li><code>-f hls</code> defines the output format HLS</li>
+<li><code>-var_stream_map “v:0 v:1 v:2 v:3”</code> tells FFmpeg what streams are combined together. A space separates each variant and everything that should be placed together is concatenated with a comma(if audio as well)</li>
+<li><code>-master_pl_name master.m3u8</code> creates the new master playlist that contains the list of streams</li>
+<li><code>-hls_segment_filename stream_%v/data%03d.ts</code> sets the name of the segment file. Folder is added named “stream_%v”. %v is the stream variant. The %03d in the filename is a formatted number. 03 means fill the number up with 0 up to 3 digits</li>
+<li><code>-use_localtime_mkdir 1</code> adds base-url to the playlist files so that the variant streams' segments can be located</li>
+</ul>
+</li>
+<li>Refer to FFMPEG Documentation for further use or check out this tutorial: https://www.martin-riedl.de/2018/08/24/using-ffmpeg-as-a-hls-streaming-server-part-1/</li>
+</ul>
+<h2 id="flask-app-to-stream-from-playlist">Flask app to stream from playlist</h2>
+<ul>
+<li>Streams video from master M3U8 playlist</li>
+<li>Place all playlists includng master with stream segmetn directories inside '/video' folder</li>
+<li>The app uses a CDN from CloudFlare to implement the HLS functionality for adaptive bitrate </li>
+<li>How to run
+~~~bash
+pip install -r requirements.txt
+./run.sh
+~~~</li>
+<li>Go <a href="http://localhost:5000">http://localhost:5000</a></li>
+</ul>
+<h2 id="further-work">Further Work</h2>
+<ul>
+<li>All modules need to integrated such that the video captured from camera via Kafka is created into MP4 files, and the files are used by the FFMPEG script to create playlists and the Flask app streams all master playlists in chronological order</li>
+<li>Improvements:<ul>
+<li>Storing all MP4 files as well as M3U8 playlist (along with variant playlists and segments) is not feasible. Hence look into cleanup strategy (eg: using overwite after playlist is streamed) or caching for temporary usage.</li>
+<li>Test adaptive bitrate by simulating changes in bandwidth. </li>
+</ul>
+</li>
+</ul>
+</body></html>
